@@ -70,11 +70,40 @@ edebilirsin; büyük bir profil çekmeden önce bakmak, işin ortasında limite 
 | `is_lost` | Kaybolmuş linkler disavow gerektirmez ama negatif SEO saldırısının zamanlamasını gösterir. |
 | `link_group_count` | Aynı domainden kaç link geldiği. Tek domainden yüzlerce link sitewide footer/blogroll link'idir. |
 
-## Veri gelmezse
+## Sayfalama — tek çağrı çoğu zaman yetmez
 
-`limit` varsayılanı 1000'dir; büyük profillerde bunu yükselt. API tek seferde çok büyük
-yanıt döndüremiyorsa `order_by: "domain_rating_source:desc"` ile sayfalara böl ve
-`where` filtresiyle DR aralıklarına ayırarak çek.
+**Pratikte tek çağrı en fazla ~500 satır döndürür**, `limit` daha yükseğe ayarlansa bile.
+Profilin tamamını aldığını varsayma; kontrol et ve eksikse ikinci çağrıyı yap.
+
+Yöntem: `order_by: "domain_rating_source:desc"` ile çek, dönen son kaydın DR'sine bak,
+sonra `where` ile o değerin altını iste:
+
+```
+where: {"and":[{"field":"domain_rating_source","is":["lte", <son_DR>]}]}
+```
+
+İki partiyi `url_from` üzerinden tekilleştirerek birleştir. İkinci parti tavanın altında
+bir sayı döndürdüyse (ör. 500 yerine 458) profili tamamlamışsın demektir. Birleşik setin
+DR aralığı 0'dan başlıyorsa da doğrulanmış olur.
+
+Kaç domain beklemen gerektiğini önceden bilmek için `site-explorer-backlinks-stats`
+çağır — `live_refdomains` ve `all_time_refdomains` sana hedefi verir, böylece eksik veriyle
+analiz yapma riskini baştan ortadan kaldırırsın.
+
+## Büyük yanıtlar bağlama sığmaz
+
+Birkaç yüz satırlık bir yanıt MCP'nin token sınırını aşar ve otomatik olarak bir dosyaya
+kaydedilir. Bu bir hata değil, avantaj: dosyayı doğrudan `scripts/hazirla.py`'a
+besleyebilirsin, içeriğini bağlama almana gerek yok.
+
+Kaydedilen dosya `[{"type":"text","text":"<gerçek json>"}]` sarmalayıcısındadır; içteki
+`text` alanını bir kez daha JSON olarak çözmen gerekir:
+
+```python
+raw = json.load(open(dosya, encoding="utf-8"))
+veri = json.loads(raw[0]["text"])
+kayitlar = veri["backlinks"]
+```
 
 Kullanıcı Ahrefs MCP'ye erişemiyorsa ya da UI'dan export etmeyi tercih ediyorsa, manuel
 export dosyası da kabul edilir. Ahrefs export'ları **UTF-16 kodlu ve sekme ayraçlı**

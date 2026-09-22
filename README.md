@@ -12,7 +12,8 @@ yerel işletme sitesini reddeder, DR 61 ama organik trafiği sıfır olan bir li
 ağını kaçırır. Ahrefs'in `is spam` sütunu da yardımcı bir sinyaldir, karar mercii değil —
 gerçek spam'in büyük kısmı o sütunda `false` görünür.
 
-Bu skill bu yüzden domainleri Playwright ile fiilen ziyaret ederek karar verir.
+Bu skill bu yüzden domainleri fiilen inceleyerek karar verir — başlık triyajı, WebFetch
+ile toplu inceleme ve gerektiğinde Playwright ziyareti.
 
 ## Akış
 
@@ -23,10 +24,12 @@ Bu skill bu yüzden domainleri Playwright ile fiilen ziyaret ederek karar verir.
    `history: since:<tarih>` (Site Explorer arayüzündeki "One link per domain" + "Show
    history" ayarlarının birebir karşılığı)
 4. **Ön sınıflandırma** — domainler toxic-imza / beyaz-liste / gri kovalarına ayrılır.
-   Bu bir karar değil, Playwright ziyaretlerini doğru yere yöneltmek için önceliklendirmedir
-5. **Playwright ile ziyaret** — gri kovadaki her domain, artı DR ≥ 30 veya trafiği ≥ 10.000
-   olan her domain (toxic imzası taşısa bile). Yanlış pozitifin pahalı olduğu yerde gözle
-   doğrulanır
+   Bu bir karar değil, inceleme emeğini doğru yere yöneltmek için önceliklendirmedir
+5. **Katmanlı inceleme** — önce başlık/metadata triyajı (kimliği tartışmasız platformlar ve
+   başlığı kendini ele veren spam burada kesinleşir), sonra kalanlar için WebFetch ile toplu
+   inceleme, Playwright ise 403 dönen / JavaScript ile render edilen / görsel doğrulama
+   gerektiren sayfalara ayrılır. Triyaj sonrası kalan her domain, artı DR ≥ 30 veya trafiği
+   ≥ 10.000 olan her domain (toxic imzası taşısa bile) incelenir
 6. **Belirsizler kullanıcıya sorulur** — toplu ve gerekçeli olarak
 7. **Teslim seti üretilir**
 
@@ -65,7 +68,9 @@ backlink analizi", "disavow listesi hazırla" gibi taleplerde kendiliğinden dev
 
 - **Ahrefs MCP** — backlink verisini çekmek için. Alternatif olarak Site Explorer'dan
   alınmış manuel export dosyası da kabul edilir (UTF-16, sekme ayraçlı)
-- **Playwright MCP** — domain ziyaretleri için
+- **WebFetch** — domain incelemelerinin büyük kısmı için
+- **Playwright MCP** — 403 dönen, JavaScript ile render edilen veya görsel doğrulama
+  gerektiren sayfalar için
 - **Python paketleri:** `tldextract`, `openpyxl`
 
 ```bash
@@ -84,7 +89,7 @@ toxic-backlink-disavow/
 ├── references/
 │   ├── ahrefs-cekme.md               API parametreleri, kolon seçimi ve maliyeti
 │   ├── siniflandirma.md              Toxic kategorileri, beyaz liste, karar matrisi
-│   ├── playwright-inceleme.md        Ziyaret protokolü ve ölçek yönetimi
+│   ├── domain-inceleme.md            Katmanlı inceleme protokolü ve ölçek yönetimi
 │   └── ciktilar.md                   Teslim seti formatı
 └── scripts/
     ├── hazirla.py                    Normalize + mevcut disavow kesişimi

@@ -1,6 +1,6 @@
 ---
 name: toxic-backlink-disavow
-description: Bir domainin backlink profilini Ahrefs üzerinden çekip toxic link analizi yapar ve Google Search Console'a yüklenmeye hazır disavow listesi üretir. Domainleri Playwright ile fiilen ziyaret ederek içerik ve amaç bazlı karar verir; yalnızca Ahrefs'in "is spam" sütununa veya DR/trafik metriklerine güvenmez. Mevcut disavow dosyasıyla kesişim kontrolü yaparak aynı domainin listede tekrarlanmasını engeller. Şu taleplerde mutlaka kullan - "toxic backlink analizi", "disavow listesi hazırla", "zararlı backlinkleri tespit et", "backlink temizliği", "spam link analizi", "disavow dosyası güncelle", "şu domainin backlinklerini incele", "hangi linkleri reddetmeliyiz", "negatif SEO kontrolü", ya da kullanıcı bir Ahrefs backlink export dosyasıyla gelip "bunlardan hangileri zararlı" diye sorduğunda. Kullanıcı "disavow" kelimesini kullanmasa bile backlink profilinin temizlenmesinden bahsediyorsa tetikle.
+description: Bir domainin backlink profilini Ahrefs üzerinden çekip toxic link analizi yapar ve Google Search Console'a yüklenmeye hazır disavow listesi üretir. Domainleri WebFetch ve Playwright ile fiilen inceleyerek içerik ve amaç bazlı karar verir; yalnızca Ahrefs'in "is spam" sütununa veya DR/trafik metriklerine güvenmez. Mevcut disavow dosyasıyla kesişim kontrolü yaparak aynı domainin listede tekrarlanmasını engeller. Şu taleplerde mutlaka kullan - "toxic backlink analizi", "disavow listesi hazırla", "zararlı backlinkleri tespit et", "backlink temizliği", "spam link analizi", "disavow dosyası güncelle", "şu domainin backlinklerini incele", "hangi linkleri reddetmeliyiz", "negatif SEO kontrolü", ya da kullanıcı bir Ahrefs backlink export dosyasıyla gelip "bunlardan hangileri zararlı" diye sorduğunda. Kullanıcı "disavow" kelimesini kullanmasa bile backlink profilinin temizlenmesinden bahsediyorsa tetikle.
 ---
 
 # Toxic Backlink Analizi ve Disavow Listesi Üretimi
@@ -24,7 +24,7 @@ filtreleme hem meşru linkleri yok eder hem de gerçek spam'i kaçırır:
   mercii değil. Gerçek spam'in büyük kısmı bu sütunda `false` görünür.
 
 Karar vermenin tek güvenilir yolu domaini açıp ne olduğuna bakmaktır. Bu yüzden akışın
-merkezinde Playwright ile fiili ziyaret vardır.
+merkezinde domainleri fiilen inceleme adımı vardır.
 
 ## Akış
 
@@ -47,8 +47,7 @@ disavow dosyasını istemelisin:
 
 Sebebi: mevcut listede zaten olan bir domaini tekrar analiz etmek hem boşa iş hem de
 teslim dosyasında aynı domainin iki-üç kez görünmesine yol açar. Kesişim kontrolünü
-**analiz başlamadan** yap, böylece Playwright ziyaretlerini de gereksiz domainlerde
-harcamazsın.
+**analiz başlamadan** yap, böylece inceleme emeğini de gereksiz domainlerde harcamazsın.
 
 ### 2. Ahrefs'ten veriyi çek
 
@@ -71,32 +70,43 @@ söyle. Bu, çalışmanın ölçeğini baştan görmesini sağlar.
 `scripts/siniflandir.py` bilinen imzalara göre kaba bir ayrım yapar ve her domaini üç
 kovadan birine koyar: `toxic-imza`, `beyaz-liste`, `gri`.
 
-Bu **karar değil, önceliklendirmedir**. Amaç Playwright ziyaretlerini doğru yere
-yöneltmek. İmza listesi ve beyaz liste mantığı için `references/siniflandirma.md` oku.
+Bu **karar değil, önceliklendirmedir**. Amaç inceleme emeğini doğru yere yöneltmek. İmza listesi ve beyaz liste mantığı için `references/siniflandirma.md` oku.
 
-### 5. Playwright ile ziyaret et
+### 5. Domainleri incele
 
-Şunları ziyaret et:
+İnceleme üç katmanlıdır; hepsini tek bir araca yıkmak tıkanmaya yol açar:
 
-- **Gri kovadaki her domain** — imzaya oturmayanlar, yani gerçekten bakılması gerekenler.
-- **DR veya trafiği yüksek olan her domain** — toxic imzası taşısa bile. Yanlış pozitif
-  maliyeti burada en yüksektir: meşru ve güçlü bir linki yanlışlıkla disavow etmek
-  sıralama kaybına yol açar, o yüzden bu domainlerde imzaya güvenmek yerine gözle doğrula.
+1. **Başlık ve metadata triyajı** — listeyi bir kez gözden geçir. Kimliği tartışmasız
+   platformlar (arama motorları, tanınmış yayınlar, AVM siteleri) ve başlığı kendini ele
+   veren spam ("Directory Pages Index", "Buy Dofollow Backlinks") burada kesinleşir.
+   Bunları açmak hiçbir şey öğretmez.
+2. **WebFetch ile toplu inceleme** — triyajdan geçemeyen her domain için varsayılan araç.
+   Sayfayı çekip sorduğun soruya cevap verir; paralel çağırabildiğin için 100 domain bile
+   makul sürede biter.
+3. **Playwright ile hedefli ziyaret** — WebFetch'in yetmediği yerler: 403 dönen önemli
+   domainler, JavaScript ile render edilen sayfalar, görsel doğrulama gerektiren yetişkin
+   içerik şüphesi.
 
-Ziyaret protokolü, neye bakılacağı ve toplu ziyaretin nasıl yürütüleceği için
-`references/playwright-inceleme.md` oku.
+Protokol, hangi soruyu soracağın, erişilemeyen domainlerin nasıl ele alınacağı ve ölçek
+yönetimi için `references/domain-inceleme.md` oku.
 
-Toxic imzası taşıyan düşük DR'li domainleri tek tek ziyaret etmene gerek yok — 200 tane
-`seoexpress-*.store` domaini aynı ağın parçasıdır, birkaç örnek ziyaret edip kalanını
-imza üzerinden sınıflandırmak yeterlidir. Bunu yaptığında notlar sütununda belirt.
+Katman 1 sonrası kalan her domaini incele, ayrıca **DR ≥ 30 veya trafiği ≥ 10.000 olan
+her domaini** — toxic imzası taşısa bile. Yanlış pozitifin maliyeti burada asimetriktir:
+meşru ve güçlü bir linki yanlışlıkla disavow etmek sıralama kaybettirir, zayıf bir spam
+linkini bir tur fazla incelemek sadece zaman alır.
+
+Buna karşılık aynı ağa ait seri domainleri tek tek açma — 200 tane `seoexpress-*.store`
+aynı şablondandır; birkaç örnek yeter, kalanını imza üzerinden sınıflandır ve notlar
+sütununda belirt.
 
 ### 6. Emin olamadıklarını kullanıcıya sor
 
-Ziyaret sonrası hâlâ karar veremediğin domainler olacak — özellikle:
+İnceleme sonrası hâlâ karar veremediğin domainler olacak — özellikle:
 - İçeriği anlamlı ama link yerleşimi şüpheli görünenler (ör. konuyla alakasız bir haber
   sitesinde ürün odaklı bir yazı)
 - Markanın kendi PR/link building çalışması olabilecek siteler
-- Erişilemeyen, parked ya da hata veren domainler
+- Erişilemeyen, parked ya da hata veren domainler (spam ağları hızla kapandığı için bu
+  grup beklediğinden kalabalık çıkar)
 
 Bunları toplu halde ve gerekçesiyle sun, tek tek sorup kullanıcıyı yorma. Kullanıcı
 markanın link geçmişini senden iyi bilir; "bu sizin çalışmanız mı?" sorusu çoğu belirsizliği

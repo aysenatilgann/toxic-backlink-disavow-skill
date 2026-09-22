@@ -29,7 +29,9 @@ LINK_SATIS_BASLIK = re.compile(
     r"(directory pages index|domain list page|most visited|website list|domain collection"
     r"|buy .{0,20}backlink|backlinks? for|dofollow|guest post|niche edit|pbn"
     r"|link building|link velocity|domain rating|trust flow|serp boost|crawl budget"
-    r"|anchor text|high da|da/pa|tier.?1|outreach pro|link juice|rank forge|link baron"
+    r"|anchor text|high(er)? da|da/pa|tier.?1|outreach pro|link juice|rank forge|link baron"
+    r"|seoexpress|seo express|spent a small fortune|white hat seo|authority backlink"
+    r"|contextual link|citation flow|manual outreach|higher d[ar] score|domain authority"
     r"|seo cartel|seo.?anomaly|links.?dealer|masslinker|t\.me/|telegram)",
     re.I,
 )
