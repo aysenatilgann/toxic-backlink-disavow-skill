@@ -71,6 +71,71 @@ Kullanım:
 Beklenmedik davranış görürsen `browser_handle_dialog` ile kapat, tetikleyecek butonlara
 tıklama.
 
+## 100'den fazla domain varsa: Sonnet alt ajanlarına böl
+
+İnceleme adımı bu çalışmanın token harcamasının yaklaşık %90'ıdır — her domain için bir
+sayfa çekilir, okunur ve bir cümle yazılır. Bu iş yargı gerektirir ama derin muhakeme
+gerektirmez; Sonnet rahatça yapar. Büyük profillerde bunu ana oturumda yürütmek maliyeti
+gereksiz yere katlar.
+
+**Kural:** incelenecek domain sayısı 100'ü aşıyorsa işi `Agent` aracıyla
+`model: "sonnet"` alt ajanlarına dağıt.
+
+**Bölme:** her alt ajana 60-80 domain ver. Daha küçük partiler kurulum maliyetini
+(görev metni, protokol) gereksiz tekrarlar; daha büyükleri alt ajanın bağlamını doldurur.
+Partileri aynı mesajda başlat ki paralel çalışsınlar.
+
+**Partileri anlamlı böl.** Rastgele bölmek yerine aynı ağa ait domainleri tek partide
+topla — alt ajan ağı bir kez tanır, kalanını hızla sınıflandırır. Yüksek DR'li domainleri
+de kendi partisinde topla; bunlar en dikkatli bakılması gerekenlerdir.
+
+**Alt ajana verilecek görev metni** şu parçaları içermeli:
+
+```
+Sana bir backlink domain listesi veriyorum. Her biri için sayfayı inceleyip
+toxic olup olmadığına karar ver.
+
+Marka: <marka>  |  Hedef pazar: <ülke>, beklenen diller: <tr,en>
+Girdi dosyası: <yol>/parti-N.json
+Çıktı dosyası: <yol>/parti-N-karar.json
+
+YÖNTEM
+- Her domain için WebFetch ile linkin bulunduğu URL'yi çek ve sor: bu site ne için
+  var? Gerçek bir yayın/işletme mi, yoksa link yerleştirmek için mi kurulmuş?
+  Sayfada kaç alakasız dış link var? Marka doğal bağlamda mı anılmış?
+- 4-5 domaini aynı anda paralel çek.
+- 404/DNS/SSL hatası alırsan tekrar deneme; aşağıdaki kurala göre işaretle.
+- Aynı başlığı taşıyan seri domainleri tek tek açma; 2-3 örnek yeter, kalanını
+  imza üzerinden sınıflandır ve notta belirt.
+
+KARAR KURALLARI
+- Karar İÇERİĞE göre verilir, metriğe göre değil. DR 0 / trafik 0 olan anlamlı bir
+  site temizdir; DR 60 ama organik trafiği sıfır olan site PBN'dir.
+- Link satışı, hacklenmiş site, otomatik içerik çiftliği -> "Disavow"
+- Yetişkin içerik veya kumar -> "Disavow (kritik)"
+- Markayı listeleyen site (AVM, rehber, kupon, uygulama dizini) -> "Temiz"
+- Gerçek yayın/işletme, marka doğal bağlamda anılmış -> "Temiz"
+- Ölü domain + toxic imza -> "Disavow"
+- Erişilemiyor ama imza yok, ya da PR/satın alınmış link şüphesi -> "Kontrol gerekli"
+
+ÇIKTI
+Girdideki her kayda "aksiyon" ve "notlar" alanlarını ekleyip aynı JSON yapısında
+çıktı dosyasına yaz. "notlar" tek cümlelik gerekçe olmalı ve ne gördüğünü
+söylemeli ("DR 61 ama trafik sıfır, sayfa bir link satış dizini" gibi) - kullanıcı
+bu notla markaya karşı kararı savunacak.
+
+Bitirince sadece şunu bildir: kaç domain işledin, aksiyon dağılımı ne oldu,
+hangi domainler için kullanıcı onayı gerekiyor.
+```
+
+Alt ajanların çıktılarını topladıktan sonra tek dosyada birleştir ve **kendin bir geçiş
+yap**: "Kontrol gerekli" işaretlenenleri ve yüksek DR'li "Disavow" kararlarını gözden
+geçir. Alt ajan kararlarını körlemesine kabul etme — nihai sorumluluk sende, özellikle
+yanlış pozitifin pahalı olduğu yüksek DR'li domainlerde.
+
+Yetişkin içerik tespitlerini de ayrıca doğrula; bu kategori markaya acil olarak
+raporlanacağı için yanlış alarm vermek güven kaybettirir.
+
 ## Kimi incelemek zorundasın
 
 Katman 1 sonrası kalan her domain, artı şu ikisi:

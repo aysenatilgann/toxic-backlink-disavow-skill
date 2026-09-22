@@ -17,9 +17,10 @@ ile toplu inceleme ve gerektiğinde Playwright ziyareti.
 
 ## Akış
 
-1. **Tarih aralığı sorulur** — hangi dönemden itibaren gelen backlinklerle çalışılacağı
-2. **Mevcut disavow dosyası istenir** — analiz başlamadan kesişim kontrolü yapılır, böylece
-   aynı domain listede tekrarlanmaz ve zaten reddedilmiş domainlere zaman harcanmaz
+1. **Hedef pazar sorulur** — site hangi ülkede hizmet veriyor. Dil bilgisi olmadan hem
+   hedef pazarın meşru siteleri yabancı sanılıp reddedilir, hem de pazarla ilgisiz dildeki
+   spam olağan sanılıp kaçırılır
+2. **Tarih aralığı sorulur** — hangi dönemden itibaren gelen backlinklerle çalışılacağı
 3. **Ahrefs'ten veri çekilir** — `aggregation: 1_per_domain`, `mode: subdomains`,
    `history: since:<tarih>` (Site Explorer arayüzündeki "One link per domain" + "Show
    history" ayarlarının birebir karşılığı)
@@ -29,9 +30,13 @@ ile toplu inceleme ve gerektiğinde Playwright ziyareti.
    başlığı kendini ele veren spam burada kesinleşir), sonra kalanlar için WebFetch ile toplu
    inceleme, Playwright ise 403 dönen / JavaScript ile render edilen / görsel doğrulama
    gerektiren sayfalara ayrılır. Triyaj sonrası kalan her domain, artı DR ≥ 30 veya trafiği
-   ≥ 10.000 olan her domain (toxic imzası taşısa bile) incelenir
+   ≥ 10.000 olan her domain (toxic imzası taşısa bile) incelenir. **100'den fazla domain
+   incelenecekse iş Sonnet alt ajanlarına bölünür** — inceleme tüm çalışmanın token
+   harcamasının ~%90'ı ve Sonnet'in rahatça yaptığı türden bir iş
 6. **Belirsizler kullanıcıya sorulur** — toplu ve gerekçeli olarak
-7. **Teslim seti üretilir**
+7. **Rapor üretilir ve onaya sunulur**
+8. **Onay sonrası** Search Console'daki mevcut liste istenir, yeni tespitler onun üzerine
+   eklenir ve yüklemeye hazır final dosya teslim edilir
 
 ## Tespit kategorileri
 
@@ -92,16 +97,20 @@ toxic-backlink-disavow/
 │   ├── domain-inceleme.md            Katmanlı inceleme protokolü ve ölçek yönetimi
 │   └── ciktilar.md                   Teslim seti formatı
 └── scripts/
-    ├── hazirla.py                    Normalize + mevcut disavow kesişimi
-    ├── siniflandir.py                İmza bazlı ön sınıflandırma
+    ├── hazirla.py                    Normalize + (opsiyonel) mevcut disavow kesişimi
+    ├── siniflandir.py                İmza ve dil bazlı ön sınıflandırma
+    ├── parti_bol.py                  İnceleme listesini alt ajan partilerine böler
     └── rapor_uret.py                 Excel + birleşik disavow dosyası
 ```
 
 Scriptler tek başına da çalışır:
 
 ```bash
-python scripts/hazirla.py --backlinks export.csv --disavow mevcut.txt --out calisma/
-python scripts/siniflandir.py --girdi calisma/yeni.json --out calisma/
+python scripts/hazirla.py --backlinks export.csv --out calisma/
+python scripts/siniflandir.py --girdi calisma/yeni.json --out calisma/ --diller tr
+python scripts/parti_bol.py --girdi calisma/siniflandirma.json --out calisma/partiler
+python scripts/rapor_uret.py --kararlar calisma/kararlar.json --out teslim/ --marka "Marka Adı"
+# onay alindiktan sonra:
 python scripts/rapor_uret.py --kararlar calisma/kararlar.json --out teslim/ \
   --marka "Marka Adı" --mevcut-disavow mevcut.txt
 ```

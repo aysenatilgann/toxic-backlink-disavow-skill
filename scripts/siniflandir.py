@@ -85,7 +85,36 @@ LISTELEME_KALIBI = re.compile(
 )
 
 
-def imzalari_bul(k):
+# Pazar dili disinda kalan dillerin spam agi sinyali olma gucu. Hedef pazarin dilinde
+# olmayan bir sayfadan link gelmesi tek basina toxic yapmaz (global markalar, yabanci
+# pazaryerleri, kargo siteleri mesru olarak baska dilde olur) - ama pazarla hicbir
+# ilgisi olmayan uzak bir dil, otomatik uretim aglarinin en gorunur izidir.
+UZAK_DILLER = {"zh", "id", "ja", "ko", "th", "vi", "hi", "bn", "ur", "fa", "ms", "tl"}
+
+
+def dil_uyumsuz(k, pazar_dilleri):
+    """Sayfa dili hedef pazarla uyumsuz ve uzak bir dilse True."""
+    if not pazar_dilleri:
+        return False
+    ham = k.get("diller")
+    if not ham:
+        return False
+    if isinstance(ham, str):
+        diller = [d.strip().lower()[:2] for d in ham.replace(";", ",").split(",") if d.strip()]
+    else:
+        diller = [str(d).strip().lower()[:2] for d in ham if str(d).strip()]
+    if not diller:
+        return False
+    # Pazar dillerinden biri varsa uyumlu say
+    if any(d in pazar_dilleri for d in diller):
+        return False
+    # Ingilizce her pazarda olagan kabul edilir
+    if "en" in diller:
+        return False
+    return any(d in UZAK_DILLER for d in diller)
+
+
+def imzalari_bul(k, pazar_dilleri=frozenset()):
     host = (k.get("host") or "").lower()
     domain = (k.get("domain") or "").lower()
     baslik = str(k.get("baslik") or "")
@@ -118,6 +147,9 @@ def imzalari_bul(k):
     if (k.get("dis_link") or 0) >= 300:
         imzalar.append("asiri-dis-link")
 
+    if dil_uyumsuz(k, pazar_dilleri):
+        imzalar.append("pazar-disi-dil")
+
     return imzalar
 
 
@@ -130,8 +162,8 @@ def beyaz_mi(k):
     return None
 
 
-def kova_belirle(k):
-    imzalar = imzalari_bul(k)
+def kova_belirle(k, pazar_dilleri=frozenset()):
+    imzalar = imzalari_bul(k, pazar_dilleri)
 
     # Yetiskin ve kumar imzasi beyaz listeyi ezer - bunlar hicbir kosulda temiz sayilmaz
     kritik = {"yetiskin-icerik", "kumar"} & set(imzalar)
@@ -147,6 +179,13 @@ def kova_belirle(k):
     if {"link-satis-baslik", "link-satis-domain"} & set(imzalar):
         return "toxic-imza", "link-satis", imzalar
     if {"otomatik-icerik", "rastgele-host"} & set(imzalar):
+        return "toxic-imza", "icerik-ciftligi", imzalar
+    # Pazar disi uzak dil TEK BASINA toxic yapmaz - yabanci pazaryeri, kargo ya da
+    # haber sitesi mesru olarak baska dilde olabilir. Ancak supheli uzanti ya da
+    # asiri dis link gibi ikinci bir imzayla birlesirse otomatik uretim agidir.
+    if "pazar-disi-dil" in imzalar and (
+        SUPHELI_TLD.search(k.get("domain") or "") or "asiri-dis-link" in imzalar
+    ):
         return "toxic-imza", "icerik-ciftligi", imzalar
     if "yuksek-dr-sifir-trafik" in imzalar and SUPHELI_TLD.search(k.get("domain") or ""):
         return "toxic-imza", "pbn-supheli", imzalar
@@ -165,7 +204,16 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--dr-esik", type=float, default=DR_ESIK)
     ap.add_argument("--trafik-esik", type=float, default=TRAFIK_ESIK)
+    ap.add_argument(
+        "--diller",
+        default="",
+        help="Hedef pazarin dilleri, virgulle: 'tr' veya 'tr,de'. Bos birakilirsa dil "
+             "degerlendirmesi yapilmaz.",
+    )
     a = ap.parse_args()
+    pazar_dilleri = frozenset(
+        d.strip().lower()[:2] for d in a.diller.split(",") if d.strip()
+    )
 
     kayitlar = json.loads(Path(a.girdi).read_text(encoding="utf-8"))
 
@@ -175,7 +223,7 @@ def main():
     )
 
     for k in kayitlar:
-        kova, kategori, imzalar = kova_belirle(k)
+        kova, kategori, imzalar = kova_belirle(k, pazar_dilleri)
         k["kova"], k["kategori"], k["imzalar"] = kova, kategori, imzalar
 
         yuksek_etkili = (k.get("dr") or 0) >= a.dr_esik or (
@@ -201,6 +249,8 @@ def main():
 
     ozet = {
         "toplam": len(kayitlar),
+        "pazar_dilleri": sorted(pazar_dilleri) or "belirtilmedi",
+        "pazar_disi_dil": sum(1 for k in kayitlar if "pazar-disi-dil" in k["imzalar"]),
         "kovalar": dict(Counter(k["kova"] for k in kayitlar)),
         "kategoriler": dict(Counter(k["kategori"] for k in kayitlar)),
         "ziyaret_edilecek": sum(1 for k in kayitlar if k["ziyaret_et"]),

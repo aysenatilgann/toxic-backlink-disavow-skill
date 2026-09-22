@@ -19,15 +19,32 @@ bulunan bir JSON listesi bekler:
 ]
 ```
 
-Çalıştırma:
+## Teslim iki aşamalıdır
+
+**Aşama 1 — onay raporu.** İnceleme bittiğinde `--mevcut-disavow` VERMEDEN çalıştır:
 
 ```bash
-python scripts/rapor_uret.py \
-  --kararlar kararlar.json \
-  --out teslim/ \
-  --marka "Marka Adı" \
-  --mevcut-disavow mevcut-disavow.txt
+python scripts/rapor_uret.py --kararlar kararlar.json --out teslim/ --marka "Marka Adı"
 ```
+
+Bu Excel raporu kullanıcının önerileri gözden geçireceği belgedir. Kategori kırılımını
+sun ve onay iste. Disavow listesi markanın arama görünürlüğünü doğrudan etkiler; son sözü
+kullanıcı söyler.
+
+**Aşama 2 — final birleşik dosya.** Kullanıcı onayladıktan sonra Search Console'daki
+mevcut listeyi iste ve aynı scripti bu kez `--mevcut-disavow` ile tekrar çalıştır:
+
+```bash
+python scripts/rapor_uret.py --kararlar kararlar.json --out teslim/ \
+  --marka "Marka Adı" --mevcut-disavow mevcut-disavow.txt
+```
+
+Script mevcut listeyi olduğu gibi korur, yeni domainleri sonuna ekler ve tekilleştirir.
+Mevcut listedeki sıralama bozulmaz, böylece kullanıcı iki sürümü karşılaştırdığında farkı
+kolayca görür.
+
+Mevcut listeyi baştan değil sonda istemenin sebebi: kullanıcı önce analizin ne çıkardığını
+görmek ister, onay vermeden Search Console'a gidip dosya indirmesi gereksiz bir adımdır.
 
 ## 1. Excel raporu
 

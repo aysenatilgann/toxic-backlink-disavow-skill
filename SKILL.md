@@ -1,6 +1,6 @@
 ---
 name: toxic-backlink-disavow
-description: Bir domainin backlink profilini Ahrefs üzerinden çekip toxic link analizi yapar ve Google Search Console'a yüklenmeye hazır disavow listesi üretir. Domainleri WebFetch ve Playwright ile fiilen inceleyerek içerik ve amaç bazlı karar verir; yalnızca Ahrefs'in "is spam" sütununa veya DR/trafik metriklerine güvenmez. Mevcut disavow dosyasıyla kesişim kontrolü yaparak aynı domainin listede tekrarlanmasını engeller. Şu taleplerde mutlaka kullan - "toxic backlink analizi", "disavow listesi hazırla", "zararlı backlinkleri tespit et", "backlink temizliği", "spam link analizi", "disavow dosyası güncelle", "şu domainin backlinklerini incele", "hangi linkleri reddetmeliyiz", "negatif SEO kontrolü", ya da kullanıcı bir Ahrefs backlink export dosyasıyla gelip "bunlardan hangileri zararlı" diye sorduğunda. Kullanıcı "disavow" kelimesini kullanmasa bile backlink profilinin temizlenmesinden bahsediyorsa tetikle.
+description: Bir domainin backlink profilini Ahrefs üzerinden çekip toxic link analizi yapar ve Google Search Console'a yüklenmeye hazır disavow listesi üretir. Domainleri WebFetch ve Playwright ile fiilen inceleyerek içerik ve amaç bazlı karar verir; yalnızca Ahrefs'in "is spam" sütununa veya DR/trafik metriklerine güvenmez. Büyük profillerde incelemeyi Sonnet alt ajanlarına bölerek token maliyetini düşürür. Şu taleplerde mutlaka kullan - "toxic backlink analizi", "disavow listesi hazırla", "zararlı backlinkleri tespit et", "backlink temizliği", "spam link analizi", "disavow dosyası güncelle", "şu domainin backlinklerini incele", "hangi linkleri reddetmeliyiz", "negatif SEO kontrolü", ya da kullanıcı bir Ahrefs backlink export dosyasıyla gelip "bunlardan hangileri zararlı" diye sorduğunda. Kullanıcı "disavow" kelimesini kullanmasa bile backlink profilinin temizlenmesinden bahsediyorsa tetikle.
 ---
 
 # Toxic Backlink Analizi ve Disavow Listesi Üretimi
@@ -28,72 +28,81 @@ merkezinde domainleri fiilen inceleme adımı vardır.
 
 ## Akış
 
-### 1. Başlamadan önce kullanıcıdan iki şey al
+### 1. Başlamadan önce iki şeyi sor
 
-**a) Tarih aralığı.** Ahrefs'in `history` parametresi hangi tarihten itibaren kaybolan
-linklerin de rapora dahil edileceğini belirler. Kullanıcıya sor:
+**a) Site hangi ülkede / pazarda hizmet veriyor?** Bu soruyu mutlaka sor ve cevabı almadan
+başlama. Dil ve pazar bilgisi olmadan iki yönde birden hata yaparsın:
 
-> Hangi tarihten itibaren gelen backlinklerle çalışalım? (ör. son 12 ay, 2025-01-01'den
-> bugüne, ya da tüm zamanlar)
+- Hedef pazarın dilindeki meşru siteleri yabancı sanıp toxic işaretlersin.
+- Hedef pazarla hiç ilgisi olmayan dildeki spam'i olağan sanıp kaçırırsın.
+
+Türkiye pazarına hizmet veren bir markaya Çince film sitesinden ya da Endonezyaca haber
+sitesinden gelen link, içeriğine bakmaya gerek kalmadan otomatik spam ağı işaretidir.
+Aynı link çok dilli global bir marka için olağan olabilir.
+
+Pazar birden fazlaysa (ör. Türkiye + Almanya, ya da global) hepsini al; beklenen dil kümesi
+buna göre genişler. Cevabı sınıflandırıcıya `--diller tr,en` biçiminde geçir.
+
+**b) Hangi tarihten itibaren gelen backlinklerle çalışalım?**
+
+> Son 12 ay, 2025-01-01'den bugüne, ya da tüm zamanlar?
 
 Belirsizse son 12 ayı öner — negatif SEO saldırıları ve satın alınmış spam genelde yakın
 dönemde yoğunlaşır, tüm zamanlar ise gereksiz hacim getirir.
 
-**b) Mevcut disavow dosyası.** Bu adımı atlama. Kullanıcıdan Search Console'daki güncel
-disavow dosyasını istemelisin:
-
-> Search Console > Disavow Links aracından mevcut listeyi indirip bana iletir misin?
-> (Yoksa ilk disavow çalışması olarak ilerleyebiliriz.)
-
-Sebebi: mevcut listede zaten olan bir domaini tekrar analiz etmek hem boşa iş hem de
-teslim dosyasında aynı domainin iki-üç kez görünmesine yol açar. Kesişim kontrolünü
-**analiz başlamadan** yap, böylece inceleme emeğini de gereksiz domainlerde harcamazsın.
+**Mevcut disavow dosyasını bu aşamada isteme.** O, çalışmanın sonunda, kullanıcı önerileri
+onayladıktan sonra devreye girer (adım 8).
 
 ### 2. Ahrefs'ten veriyi çek
 
-Parametreler ve `select` listesi için `references/ahrefs-cekme.md` dosyasını oku. Özet:
-`aggregation: "1_per_domain"` (UI'daki "One link per domain" filtresinin karşılığı),
-`mode: "subdomains"`, `history: "since:<tarih>"`.
+Parametreler, `select` listesi ve sayfalama için `references/ahrefs-cekme.md` oku. Özet:
+`aggregation: "1_per_domain"`, `mode: "subdomains"`, `history: "since:<tarih>"`.
 
-### 3. Normalize et ve kesişimi düş
+Çekmeden önce `site-explorer-backlinks-stats` ile profil büyüklüğünü öğren. Bu hem kaç
+domain beklediğini söyler hem de çalışmanın ölçeğini kullanıcıya baştan bildirmeni sağlar.
+Tek çağrı `limit`ten bağımsız olarak ~500 satırda tavan yapar; profili sayfalayarak tamamla.
 
-`scripts/hazirla.py` bunu yapar: Ahrefs çıktısındaki URL'lerden kök domaini çıkarır
-(Public Suffix List ile — `.com.tr`, `.co.uk` gibi çok parçalı uzantılar ve `web.app`
-gibi barındırma alanları doğru ayrışsın diye), mevcut disavow listesiyle karşılaştırır,
-zaten kapsanmış olanları ayırır.
+### 3. Normalize et
 
-Kullanıcıya kaç domainin zaten listede olduğunu ve kaç yeni domainin analiz edileceğini
-söyle. Bu, çalışmanın ölçeğini baştan görmesini sağlar.
+`scripts/hazirla.py` Ahrefs çıktısındaki URL'lerden kök domaini çıkarır (Public Suffix List
+ile — `.com.tr`, `.co.uk` gibi çok parçalı uzantılar ve `web.app` gibi barındırma alanları
+doğru ayrışsın diye) ve aynı kök domainden gelen tekrarları eler.
+
+Bu aşamada `--disavow` parametresini **kullanma**. Mevcut listeyle karşılaştırma sona
+bırakıldı; şimdi profilin tamamını analiz ediyorsun.
 
 ### 4. Ön sınıflandırma yap
 
-`scripts/siniflandir.py` bilinen imzalara göre kaba bir ayrım yapar ve her domaini üç
-kovadan birine koyar: `toxic-imza`, `beyaz-liste`, `gri`.
+`scripts/siniflandir.py --diller <pazar_dilleri>` bilinen imzalara göre kaba bir ayrım
+yapar ve her domaini üç kovadan birine koyar: `toxic-imza`, `beyaz-liste`, `gri`.
 
-Bu **karar değil, önceliklendirmedir**. Amaç inceleme emeğini doğru yere yöneltmek. İmza listesi ve beyaz liste mantığı için `references/siniflandirma.md` oku.
+Bu **karar değil, önceliklendirmedir**. Amaç inceleme emeğini doğru yere yöneltmek. İmza
+listesi, dil değerlendirmesi ve beyaz liste mantığı için `references/siniflandirma.md` oku.
 
 ### 5. Domainleri incele
 
 İnceleme üç katmanlıdır; hepsini tek bir araca yıkmak tıkanmaya yol açar:
 
-1. **Başlık ve metadata triyajı** — listeyi bir kez gözden geçir. Kimliği tartışmasız
-   platformlar (arama motorları, tanınmış yayınlar, AVM siteleri) ve başlığı kendini ele
-   veren spam ("Directory Pages Index", "Buy Dofollow Backlinks") burada kesinleşir.
-   Bunları açmak hiçbir şey öğretmez.
+1. **Başlık ve metadata triyajı** — kimliği tartışmasız platformlar ve başlığı kendini ele
+   veren spam burada kesinleşir, açmaya gerek kalmaz.
 2. **WebFetch ile toplu inceleme** — triyajdan geçemeyen her domain için varsayılan araç.
-   Sayfayı çekip sorduğun soruya cevap verir; paralel çağırabildiğin için 100 domain bile
-   makul sürede biter.
-3. **Playwright ile hedefli ziyaret** — WebFetch'in yetmediği yerler: 403 dönen önemli
-   domainler, JavaScript ile render edilen sayfalar, görsel doğrulama gerektiren yetişkin
-   içerik şüphesi.
+   Paralel çağrılabildiği için hızlıdır.
+3. **Playwright ile hedefli ziyaret** — 403 dönen önemli domainler, JavaScript ile render
+   edilen sayfalar, görsel doğrulama gerektiren yetişkin içerik şüphesi.
+
+**İncelenecek domain sayısı 100'ü aşıyorsa işi Sonnet alt ajanlarına böl.** Bu bir
+optimizasyon değil maliyet gereğidir: inceleme adımı tüm çalışmanın token harcamasının
+yaklaşık %90'ıdır ve her domain için yapılan iş (sayfayı aç, ne olduğuna bak, tek cümlelik
+gerekçe yaz) Sonnet'in rahatça yaptığı türden bir iştir. Bölme kuralları ve alt ajana
+verilecek görev metni `references/domain-inceleme.md` dosyasında.
 
 Protokol, hangi soruyu soracağın, erişilemeyen domainlerin nasıl ele alınacağı ve ölçek
-yönetimi için `references/domain-inceleme.md` oku.
+yönetimi de aynı dosyada.
 
-Katman 1 sonrası kalan her domaini incele, ayrıca **DR ≥ 30 veya trafiği ≥ 10.000 olan
-her domaini** — toxic imzası taşısa bile. Yanlış pozitifin maliyeti burada asimetriktir:
-meşru ve güçlü bir linki yanlışlıkla disavow etmek sıralama kaybettirir, zayıf bir spam
-linkini bir tur fazla incelemek sadece zaman alır.
+Katman 1 sonrası kalan her domaini incele, ayrıca **DR ≥ 30 veya trafiği ≥ 10.000 olan her
+domaini** — toxic imzası taşısa bile. Yanlış pozitifin maliyeti asimetriktir: meşru ve
+güçlü bir linki yanlışlıkla disavow etmek sıralama kaybettirir, zayıf bir spam linkini bir
+tur fazla incelemek sadece zaman alır.
 
 Buna karşılık aynı ağa ait seri domainleri tek tek açma — 200 tane `seoexpress-*.store`
 aynı şablondandır; birkaç örnek yeter, kalanını imza üzerinden sınıflandır ve notlar
@@ -102,22 +111,21 @@ sütununda belirt.
 ### 6. Emin olamadıklarını kullanıcıya sor
 
 İnceleme sonrası hâlâ karar veremediğin domainler olacak — özellikle:
-- İçeriği anlamlı ama link yerleşimi şüpheli görünenler (ör. konuyla alakasız bir haber
-  sitesinde ürün odaklı bir yazı)
+- İçeriği anlamlı ama link yerleşimi şüpheli görünenler
 - Markanın kendi PR/link building çalışması olabilecek siteler
-- Erişilemeyen, parked ya da hata veren domainler (spam ağları hızla kapandığı için bu
-  grup beklediğinden kalabalık çıkar)
+- Erişilemeyen, parked ya da hata veren domainler (spam ağları hızla kapandığı için bu grup
+  beklediğinden kalabalık çıkar)
 
-Bunları toplu halde ve gerekçesiyle sun, tek tek sorup kullanıcıyı yorma. Kullanıcı
-markanın link geçmişini senden iyi bilir; "bu sizin çalışmanız mı?" sorusu çoğu belirsizliği
-tek hamlede çözer.
+Bunları toplu halde ve gerekçesiyle sun, tek tek sorup kullanıcıyı yorma. Kullanıcı markanın
+link geçmişini senden iyi bilir; "bu sizin çalışmanız mı?" sorusu çoğu belirsizliği tek
+hamlede çözer. Cevabı notlar sütununa "kullanıcı teyit etti" diye işle.
 
-### 7. Çıktıları üret
+### 7. Raporu üret ve onaya sun
 
-`scripts/rapor_uret.py` iki dosya üretir. Sütun yapısı ve disavow formatı için scripti
-çalıştırman yeterli; detay `references/ciktilar.md` dosyasında.
+`scripts/rapor_uret.py` çalıştır — bu aşamada `--mevcut-disavow` **verme**. Üretilen Excel
+raporu, önerilerin kullanıcı tarafından gözden geçirileceği belgedir.
 
-**Excel raporu** — şu sütunlarla, bu sırada:
+**Excel sütunları**, bu sırada:
 
 | Sütun | İçerik |
 |---|---|
@@ -131,20 +139,38 @@ tek hamlede çözer.
 | Notlar | Kararın gerekçesi, özellikle emin olmadıklarında |
 
 Notlar sütununu boş bırakma alışkanlığı edinme — kullanıcı bu raporla markaya karşı karar
-savunacak. "DR 61 ama organik trafiği sıfır, sayfa başlığı 'Directory Pages Index', link
-satış dizini" gibi tek cümlelik bir gerekçe, listedeki her satırı denetlenebilir kılar.
+savunacak ve altı ay sonra "bu domaini neden reddetmiştik?" diye geri dönecek.
 
-**GSC'ye yüklenmeye hazır disavow dosyası** — mevcut liste + yeni tespitler birleşik,
-düz metin, `domain:` formatında. Bu teslim setinin son adımıdır ve kullanıcının hiçbir
-düzenleme yapmadan doğrudan Search Console'a yükleyebilmesi gerekir.
+Raporu sunarken kategori kırılımını ver ve **kullanıcıdan onay iste**. Onay gelmeden
+sonraki adıma geçme; disavow listesi markanın arama görünürlüğünü doğrudan etkileyen bir
+dosyadır ve son sözü kullanıcı söyler.
+
+### 8. Onay sonrası: mevcut listeyi al ve final teslimi yap
+
+Kullanıcı önerileri onayladıktan **sonra** mevcut disavow dosyasını iste:
+
+> Onaylanan liste hazır. Search Console > Disavow Links aracından mevcut listeyi indirip
+> bana iletir misiniz? Yeni tespitleri onun üzerine ekleyip yüklemeye hazır final dosyayı
+> vereceğim.
+
+Dosya geldiğinde `scripts/rapor_uret.py`'ı bu kez `--mevcut-disavow` ile tekrar çalıştır.
+Script mevcut listeyi korur, yeni domainleri sonuna ekler ve tekilleştirir — aynı domain iki
+kez görünmez.
+
+Final teslimde şunu söyle: mevcut listede kaç domain vardı, kaçı eklendi, toplam kaç oldu.
+Dosya düz metindir ve hiçbir düzenleme yapılmadan doğrudan Search Console'a yüklenebilir
+olmalıdır.
+
+Mevcut listede olup bu çalışmada "Temiz" çıkan domainler varsa bunu ayrıca bildir — geçmiş
+bir çalışmada yanlışlıkla reddedilmiş meşru bir link olabilir ve kullanıcı listeden çıkarmak
+isteyebilir. Kendiliğinden çıkarma, kararı ona bırak.
 
 ## Sonuçları sunarken
 
-Kullanıcı ajans tarafında çalışıyor ve bu raporu markaya sunacak. Terminal cevabında
-şunları ver: kaç domain incelendi, kaçı zaten listedeydi, kaç yeni disavow önerisi çıktı,
-hangi kategorilerde yoğunlaştı, kaç tanesi için onayı bekleniyor. Kategori bazlı kırılım
-(kaç tane link satış ağı, kaç tane hacklenmiş site, kaç tane yetişkin içerik) markaya
-anlatılabilir bir hikâye kurar.
+Kullanıcı ajans tarafında çalışıyor ve bu raporu markaya sunacak. Terminal cevabında şunları
+ver: kaç domain incelendi, kaç disavow önerisi çıktı, hangi kategorilerde yoğunlaştı, kaç
+tanesi için onay bekleniyor. Kategori bazlı kırılım (kaç link satış ağı, kaç hacklenmiş site,
+kaç yetişkin içerik) markaya anlatılabilir bir hikâye kurar.
 
 Yetişkin içerikli domainler varsa bunu ayrıca ve net şekilde öne çıkar — marka güvenliği
 açısından en kritik bulgudur ve genelde acil aksiyon gerektirir.
