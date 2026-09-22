@@ -43,24 +43,36 @@ Aynı link çok dilli global bir marka için olağan olabilir.
 Pazar birden fazlaysa (ör. Türkiye + Almanya, ya da global) hepsini al; beklenen dil kümesi
 buna göre genişler. Cevabı sınıflandırıcıya `--diller tr,en` biçiminde geçir.
 
-**b) Hangi tarihten itibaren gelen backlinklerle çalışalım?**
+**b) Hangi tarih aralığındaki backlinklerle çalışalım?**
 
 > Son 12 ay, 2025-01-01'den bugüne, ya da tüm zamanlar?
 
 Belirsizse son 12 ayı öner — negatif SEO saldırıları ve satın alınmış spam genelde yakın
-dönemde yoğunlaşır, tüm zamanlar ise gereksiz hacim getirir.
+dönemde yoğunlaşır, tüm zamanlar ise gereksiz hacim getirir. Bu cevabı sonraki adımda
+kullanıcıya vereceğin export talimatında kullanacaksın, o yüzden önce bunu netleştir.
 
 **Mevcut disavow dosyasını bu aşamada isteme.** O, çalışmanın sonunda, kullanıcı önerileri
 onayladıktan sonra devreye girer (adım 8).
 
-### 2. Ahrefs'ten veriyi çek
+### 2. Kullanıcıdan Ahrefs export'unu iste
 
-Parametreler, `select` listesi ve sayfalama için `references/ahrefs-cekme.md` oku. Özet:
-`aggregation: "1_per_domain"`, `mode: "subdomains"`, `history: "since:<tarih>"`.
+Veriyi kullanıcı indirip sana iletir. Tarih aralığı netleştikten sonra şu talimatı ver:
 
-Çekmeden önce `site-explorer-backlinks-stats` ile profil büyüklüğünü öğren. Bu hem kaç
-domain beklediğini söyler hem de çalışmanın ölçeğini kullanıcıya baştan bildirmeni sağlar.
-Tek çağrı `limit`ten bağımsız olarak ~500 satırda tavan yapar; profili sayfalayarak tamamla.
+> Ahrefs'ten export alalım:
+> 1. **Site Explorer**'a gidin, domaini girip taratın
+> 2. Sol menüden **Backlinks** raporunu açın
+> 3. **"One link per domain" filtresini açın** — bu kritik, filtresiz export'ta tek
+>    domainden yüzlerce satır gelir ve liste gereksiz şişer
+> 4. **Show history** ile tarih aralığını <kullanıcının verdiği aralık> olarak ayarlayın
+> 5. **Export** edin ve dosyayı bana iletin
+
+"One link per domain" filtresini ayrıca vurgula. Disavow kararı zaten domain seviyesinde
+verildiği için domain başına bir örnek link yeterlidir; filtresiz bir export hem analiz
+hacmini katlar hem de aynı domaini defalarca incelemene yol açar.
+
+Dosya geldiğinde okumadan önce formatını kontrol et — Ahrefs export'ları **UTF-16 kodlu ve
+sekme ayraçlıdır**. `scripts/hazirla.py` bunu kendiliğinden halleder; elle okuman gerekirse
+`references/ahrefs-export.md` dosyasındaki notlara bak.
 
 ### 3. Normalize et
 

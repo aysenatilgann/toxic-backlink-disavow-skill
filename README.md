@@ -21,9 +21,10 @@ ile toplu inceleme ve gerektiğinde Playwright ziyareti.
    hedef pazarın meşru siteleri yabancı sanılıp reddedilir, hem de pazarla ilgisiz dildeki
    spam olağan sanılıp kaçırılır
 2. **Tarih aralığı sorulur** — hangi dönemden itibaren gelen backlinklerle çalışılacağı
-3. **Ahrefs'ten veri çekilir** — `aggregation: 1_per_domain`, `mode: subdomains`,
-   `history: since:<tarih>` (Site Explorer arayüzündeki "One link per domain" + "Show
-   history" ayarlarının birebir karşılığı)
+3. **Kullanıcıdan Ahrefs export'u istenir** — Site Explorer > Backlinks > **"One link per
+   domain" filtresi açık** > Show history ile tarih aralığı > Export. Filtre kritiktir:
+   disavow kararı domain seviyesinde verildiği için domain başına bir örnek link yeterlidir
+   (Ahrefs MCP varsa veri doğrudan da çekilebilir, ayrıntı `references/ahrefs-export.md`)
 4. **Ön sınıflandırma** — domainler toxic-imza / beyaz-liste / gri kovalarına ayrılır.
    Bu bir karar değil, inceleme emeğini doğru yere yöneltmek için önceliklendirmedir
 5. **Katmanlı inceleme** — önce başlık/metadata triyajı (kimliği tartışmasız platformlar ve
@@ -71,8 +72,9 @@ backlink analizi", "disavow listesi hazırla" gibi taleplerde kendiliğinden dev
 
 ## Gereksinimler
 
-- **Ahrefs MCP** — backlink verisini çekmek için. Alternatif olarak Site Explorer'dan
-  alınmış manuel export dosyası da kabul edilir (UTF-16, sekme ayraçlı)
+- **Ahrefs export dosyası** — Site Explorer > Backlinks > "One link per domain" filtresi
+  açık şekilde alınmış export (UTF-16, sekme ayraçlı; .xlsx ve .json da kabul edilir).
+  Ahrefs MCP kuruluysa veri doğrudan da çekilebilir
 - **WebFetch** — domain incelemelerinin büyük kısmı için
 - **Playwright MCP** — 403 dönen, JavaScript ile render edilen veya görsel doğrulama
   gerektiren sayfalar için
@@ -92,7 +94,7 @@ doğru ayrışmaz.
 toxic-backlink-disavow/
 ├── SKILL.md                          Ana iş akışı
 ├── references/
-│   ├── ahrefs-cekme.md               API parametreleri, kolon seçimi ve maliyeti
+│   ├── ahrefs-export.md              Export talimatı, dosya formatı, MCP alternatifi
 │   ├── siniflandirma.md              Toxic kategorileri, beyaz liste, karar matrisi
 │   ├── domain-inceleme.md            Katmanlı inceleme protokolü ve ölçek yönetimi
 │   └── ciktilar.md                   Teslim seti formatı
@@ -106,7 +108,7 @@ toxic-backlink-disavow/
 Scriptler tek başına da çalışır:
 
 ```bash
-python scripts/hazirla.py --backlinks export.csv --out calisma/
+python scripts/hazirla.py --backlinks ahrefs-export.csv --out calisma/
 python scripts/siniflandir.py --girdi calisma/yeni.json --out calisma/ --diller tr
 python scripts/parti_bol.py --girdi calisma/siniflandirma.json --out calisma/partiler
 python scripts/rapor_uret.py --kararlar calisma/kararlar.json --out teslim/ --marka "Marka Adı"
